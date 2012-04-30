@@ -195,8 +195,7 @@ handle_cast(reproduce, State) ->
 		age = State#individualState.age + 1
 	},
 	
-	gen_server:cast({global, environment}, {reproduced, death, self(),
-		Childs}),
+	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
 	gen_server:cast(self(), stop),
 	
 	{noreply, NewState};
@@ -219,7 +218,7 @@ handle_cast(mutate, State) ->
 		age = State#individualState.age + 1
 	},
 	
-	gen_server:cast({global, environment}, {reproduced, death, Childs}),
+	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
 	gen_server:cast(self(), stop),
 	
 	{noreply, NewState};
@@ -230,7 +229,10 @@ handle_cast(mutate, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) -> {stop, normal, State}.
+handle_cast(stop, State) ->
+	gen_server:cast({global, environment}, {dead, self()}),
+	
+	{stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *

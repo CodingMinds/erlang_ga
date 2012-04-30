@@ -15,10 +15,8 @@
 %%%   Stops the environment
 %%% state()
 %%%   Returns internal states.
-%%% tick()
-%%%   Initializes the next cycle.
 %%% tick(Count)
-%%%   Initializes the next Count cycles.
+%%%   Reuest and initializes the next Count cycles.
 %%% init([Alphabet, Size, Population, Mutation, Fitness])
 %%%   Interface for the behaviour gen_server.
 %%% handle_cast({reproduced, IState, Childs}, From, State)
@@ -27,10 +25,11 @@
 %%% handle_call(state, From, State)
 %%%   Interface for the behaviour gen_server. Returns internal states
 %%% handle_cast(tick, From, State)
-%%%   Interface for the behaviour gen_server. Initializes the next cycle
+%%%   Interface for the behaviour gen_server. Initializes the next cycle,
+%%%   if requested and the last one finished
 %%% handle_cast({ticks, Count}, From, State)
-%%%   Interface for the behaviour gen_server. Initializes the next Count
-%%%    cycles
+%%%   Interface for the behaviour gen_server. Request and initializes the
+%%%   next Count cycles
 %%% handle_cast(stop, State)
 %%%   Interface for the behaviour gen_server. Kills the individual
 %%% handle_info(Message, State)
@@ -46,7 +45,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, tick/0, tick/1]).
+-export([start/0, start/5, stop/0, state/0, tick/1]).
 
 -include("records.hrl").
 
@@ -59,11 +58,20 @@
 start() ->
 	%%%% TODO:
 	%%%% Implement a really better first fitness function
+	%%%% cccc.. wins
 	Fitness = fun(State) ->
-		State#individualState.age
+		FunMap = fun(X) ->
+			if
+				X == a -> 1;
+				X == b -> 2;
+				X == c -> 3
+			end
+		end,
+		MappedGenome = lists:map(FunMap, State#individualState.genome),
+		lists:sum(MappedGenome)
 	end,
 	
-	start({a,b,c}, 7, 12, 10, Fitness).
+	start({a,b,c}, 7, 12, 0.2, Fitness).
 
 %%----------------------------------------------------------------------
 %% Function: start/5
@@ -73,13 +81,13 @@ start() ->
 %% Args: Alphabet, the possible alphabet for the genomes
 %%       and Size, the size of the genomes of the new individuals
 %%       and Population, the size fo the new population
-%%       and Mutation, the mutation rate
+%%       and Mutation, the mutation rate (0.0 .. 1.0)
 %%       and Fitness, a fun for the fitness
 %% Returns: {ok,Pid} | ignore | {error,Error}
 %%----------------------------------------------------------------------
 start(Alphabet, Size, Population, Mutation, Fitness)
-	when is_tuple(Alphabet), is_function(Fitness), Size > 0,
-	Population > 0 ->
+	when is_tuple(Alphabet), is_function(Fitness), is_float(Mutation),
+	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
 	
 	gen_server:start_link({global, environment}, ?MODULE, [Alphabet, Size,
 		Population, Mutation, Fitness], []).
@@ -101,17 +109,9 @@ stop() -> gen_server:cast({global, environment}, stop).
 state() -> gen_server:call({global, environment}, state).
 
 %%----------------------------------------------------------------------
-%% Function: tick/0
-%% Purpose: Initializes the next cycle.
-%% Args: -
-%% Returns: ok.
-%%----------------------------------------------------------------------
-tick() -> gen_server:cast({global, environment}, tick).
-
-%%----------------------------------------------------------------------
 %% Function: tick/1
-%% Purpose: Initializes the next cycle.
-%% Args: Count, the amount of cycles to proceed
+%% Purpose: Request and initializes the next Count cycles.
+%% Args: Count, the amount of cycles to request
 %% Returns: ok.
 %%----------------------------------------------------------------------
 tick(Count) when is_integer(Count), Count > 0 ->
@@ -124,13 +124,14 @@ tick(Count) when is_integer(Count), Count > 0 ->
 %% Args: Alphabet, the possible alphabet for the genomes
 %%       and Size, the size of the genomes of the new individuals
 %%       and Population, the size of the new population
+%%       and Mutation, the mutation rate (0.0 .. 1.0)
 %%       and Fitness, a fun for the fitness
 %% Returns: {ok, State}.
 %%----------------------------------------------------------------------
 init([Alphabet, Size, Population, Mutation, Fitness])
 	when is_tuple(Alphabet), is_integer(Size), is_integer(Population),
-	is_integer(Mutation), is_function(Fitness), size(Alphabet) > 0,
-	Size > 0, Population > 0, Mutation >= 0 ->
+	is_float(Mutation), is_function(Fitness), size(Alphabet) > 0,
+	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
 	
 	{A1,A2,A3} = now(),
 	random:seed(A1, A2, A3),
@@ -191,16 +192,15 @@ create_population(_Alphabet, _Size, _Fitness, 0, Acc) ->
 handle_call(state, _From, State) -> {reply, {state, State}, State}.
 
 %%----------------------------------------------------------------------
-%% Function: handle_cast/2
-%% Purpose: Initilaizes the next cycle
-%% Args: -
-%% Returns: {noreply, NewState}.
+%% Function: internal_tick/1
+%% Purpose: Initializes the next cycle
+%% Args: State, the actual State
+%% Returns: {ok, NewState}.
 %%----------------------------------------------------------------------
-handle_cast(tick, State) ->
-	
+internal_tick(State) ->
 	% sort with fitness
 	FunSort = fun(A, B) ->
-		element(2,A) =< element(2,B)
+		element(2,A) >= element(2,B)
 	end,
 	
 	SortedPopulation = lists:sort(FunSort,
@@ -210,24 +210,86 @@ handle_cast(tick, State) ->
 	{Reproduce, Kill} = lists:split(round(length(SortedPopulation)/2),
 		SortedPopulation),
 	
+	% fun - trigger reproduction
 	FunReproduce = fun(Individual) ->
 		{Pid, _} = Individual,
-		%% TODO:
-		%% Handle mutation !
-		gen_server:cast(Pid, reproduce)
+		Mutation = random:uniform(),
+		if
+			Mutation =< State#environmentState.mutation ->
+				gen_server:cast(Pid, mutate);
+			true ->
+				gen_server:cast(Pid, reproduce)
+		end
 	end,
+	
+	% fun - trigger stop
 	FunKill = fun(Individual) ->
 		{Pid, _} = Individual,
 		gen_server:cast(Pid, stop)
 	end,
 	
+	% call triggers
 	lists:foreach(FunReproduce, Reproduce),
 	lists:foreach(FunKill, Kill),
 	
 	NewState = State#environmentState{
 		population = Reproduce,
-		ticks = State#environmentState.ticks + 1
+		ticks = State#environmentState.ticks - 1
 	},
+	
+	{ok, NewState}.
+
+%%----------------------------------------------------------------------
+%% Function: finish_cycle/1
+%% Purpose: Check if the actual cycle is finished and clean up
+%% Args: State, the actual State
+%% Returns: {ok, NewState}.
+%%----------------------------------------------------------------------
+finish_cycle(State) ->
+	if
+		length(State#environmentState.population) == 0 ->
+			NewState = State#environmentState{
+				population = State#environmentState.new_population,
+				new_population = [],
+				age = State#environmentState.age + 1
+			},
+			
+			gen_server:cast({global, environment}, tick),
+			
+			{ok, NewState};
+		true ->
+			{ok, State}
+	end.
+
+%%----------------------------------------------------------------------
+%% Function: handle_cast/2
+%% Purpose: Initializes the next cycle if there are more ticks requested
+%%          and the last one is finished
+%% Args: -
+%% Returns: {noreply, NewState}.
+%%----------------------------------------------------------------------
+handle_cast(tick, State) ->
+	if
+		State#environmentState.ticks > 0,
+		length(State#environmentState.new_population) == 0 ->
+			{ok, NewState} = internal_tick(State),
+			{noreply, NewState};
+		true ->
+			{noreply, State}
+	end;
+
+%%----------------------------------------------------------------------
+%% Function: handle_cast/2
+%% Purpose: Request the next Count cycles
+%% Args: -
+%% Returns: {noreply, NewState}.
+%%----------------------------------------------------------------------
+handle_cast({ticks, Count}, State) ->
+	NewState =	State#environmentState {
+		ticks = State#environmentState.ticks + Count
+	},
+	
+	gen_server:cast({global, environment}, tick),
 	
 	{noreply, NewState};
 
@@ -237,29 +299,51 @@ handle_cast(tick, State) ->
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast({reproduced, _ParentAlive, Parent, Childs}, State) ->
-	%%%% TODO:
-	%%%% handle if parent is death or not .. now we guess it's death.
+handle_cast({reproduced, _Parent, Childs}, State) ->
+	%%%% TODO: y? {badrecord,environmentState} if State..-- or State..++
+	FunMap = fun(Child) ->
+		{fitness, Fit} = individual:fitness(Child),
+		{Child, Fit}
+	end,
 	
+	Childs2 = lists:map(FunMap, Childs),
+	
+	StateNewPopulation = State#environmentState.new_population,
+	NewPopulation = StateNewPopulation ++ Childs2,
+
 	NewState = State#environmentState{
-		population = State#environmentState.population -- [Parent],
-		new_population = 	State#environmentState.new_population ++ Childs
+		new_population = NewPopulation
 	},
 	
-	if
-		length(State#environmentState.population) == 0 ->
-			NewState2 = State#environmentState{
-				population = State#environmentState.new_population,
-				new_population = [],
-				age = State#environmentState.age + 1,
-				ticks = State#environmentState.ticks - 1
-			},
-			
-			{noreply, NewState2};
-		true ->
-			{noreply, NewState}
-	end;
+	{ok, NewState2} = finish_cycle(NewState),
 	
+	{noreply, NewState2};
+
+%%----------------------------------------------------------------------
+%% Function: handle_cast/2
+%% Purpose: Handles incoming reproduction results
+%% Args: -
+%% Returns: {noreply, NewState}.
+%%----------------------------------------------------------------------
+handle_cast({dead, Individual}, State) ->
+	FunFilter = fun(Ind) ->
+		{Pid, _Fitness} = Ind,
+		if
+			Pid == Individual ->
+				false;
+			true ->
+				true
+		end
+	end,
+	Population = lists:filter(FunFilter, State#environmentState.population),
+
+	NewState = State#environmentState{
+		population = Population
+	},
+	
+	{ok, NewState2} = finish_cycle(NewState),
+	
+	{noreply, NewState2};
 
 %%----------------------------------------------------------------------
 %% Function: handle_cast/2
@@ -267,7 +351,18 @@ handle_cast({reproduced, _ParentAlive, Parent, Childs}, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) -> {stop, normal, State}.
+handle_cast(stop, State) ->
+	% fun - trigger stop
+	FunKill = fun(Individual) ->
+		{Pid, _} = Individual,
+		gen_server:cast(Pid, stop)
+	end,
+	
+	% call triggers
+	lists:foreach(FunKill, State#environmentState.population),
+	lists:foreach(FunKill, State#environmentState.new_population),
+
+	{stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *

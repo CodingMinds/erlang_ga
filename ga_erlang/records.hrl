@@ -13,9 +13,9 @@
 %% where:
 %%    population: A list with individuals (default is []).
 %%    new_population: A list with individuals (default is []).
-%%    mutation: An integer (default is 0).
+%%    mutation: An flot (default is 0.0).
 %%    age: An integer (default is 0).
 %%    ticks: An integer (default is 0).
 %%----------------------------------------------------------------------
--record(environmentState, {population = {}, new_population = [],
-	mutation = 0, age = 0, ticks = 0}).
+-record(environmentState, {population = [], new_population = [],
+	mutation = 0.0, age = 0, ticks = 0}).
