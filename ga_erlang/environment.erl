@@ -14,7 +14,9 @@
 %%% stop()
 %%%   Stops the environment
 %%% state()
-%%%   Returns internal states.
+%%%   Returns internal states
+%%% stats()
+%%%   Returns the fitness of each individual
 %%% tick(Count)
 %%%   Reuest and initializes the next Count cycles.
 %%% init([Alphabet, Size, Population, Mutation, Fitness])
@@ -45,7 +47,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, tick/1]).
+-export([start/0, start/5, stop/0, state/0, stats/0, tick/1]).
 
 -include("records.hrl").
 
@@ -107,6 +109,14 @@ stop() -> gen_server:cast({global, environment}, stop).
 %% Returns: {state, State}
 %%----------------------------------------------------------------------
 state() -> gen_server:call({global, environment}, state).
+
+%%----------------------------------------------------------------------
+%% Function: stats/0
+%% Purpose: Returns the fitness of each individual
+%% Args: -
+%% Returns: {state, State}
+%%----------------------------------------------------------------------
+stats() -> gen_server:call({global, environment}, state).
 
 %%----------------------------------------------------------------------
 %% Function: tick/1
@@ -189,7 +199,22 @@ create_population(_Alphabet, _Size, _Fitness, 0, Acc) ->
 %% Args: -
 %% Returns: {reply, {state, State}, State}.
 %%----------------------------------------------------------------------
-handle_call(state, _From, State) -> {reply, {state, State}, State}.
+handle_call(state, _From, State) -> {reply, {state, State}, State};
+
+%%----------------------------------------------------------------------
+%% Function: handle_call/3
+%% Purpose: Returns the fitness of each individual
+%% Args: -
+%% Returns: {reply, {stats, Stats}, State}.
+%%----------------------------------------------------------------------
+handle_call(stats, _From, State) ->
+	FunMap = fun(Individual) ->
+		{_Pid, Fitness} = Individual,
+		Fitness
+	end,
+	Fitness = lists:map(FunMap, State#environmentState.population),
+	
+	{reply, {stats, Fitness}, State}.
 
 %%----------------------------------------------------------------------
 %% Function: internal_tick/1
