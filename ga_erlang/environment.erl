@@ -116,7 +116,7 @@ state() -> gen_server:call({global, environment}, state).
 %% Args: -
 %% Returns: {state, State}
 %%----------------------------------------------------------------------
-stats() -> gen_server:call({global, environment}, state).
+stats() -> gen_server:call({global, environment}, stats).
 
 %%----------------------------------------------------------------------
 %% Function: tick/1
