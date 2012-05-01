@@ -1,2 +1,3 @@
 .DS_Store
 *.beam
+erl_crash.dump
