@@ -160,6 +160,26 @@ create_genome(_Alphabet, 0) ->
 	{genome, []}.
 
 %%----------------------------------------------------------------------
+%% Function: mutate_genome/1
+%% Purpose: Mutate given genome
+%% Args: Genome, the genome which should be mutated
+%%       and Alphabet, the possible alphabet
+%% Returns: {ok, NewGenome}.
+%%----------------------------------------------------------------------
+mutate_genome(Genome, Alphabet) ->
+	Length = length(Genome),
+	Position = random:uniform(Length-1),
+	
+	Head = lists:sublist(Genome, Position),
+	Tail = lists:sublist(Genome, Position+2, Length),
+	
+	Gene = element(random:uniform(tuple_size(Alphabet)), Alphabet),
+	
+	NewGenome = Head ++ [Gene] ++ Tail,
+	
+	{genome, NewGenome}.
+
+%%----------------------------------------------------------------------
 %% Function: handle_call/3
 %% Purpose: Returns internal state
 %% Args: -
@@ -207,11 +227,13 @@ handle_cast(reproduce, State) ->
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
 handle_cast(mutate, State) ->
-	%% TODO : add mutation
+	{genome, NewGenome} = mutate_genome(State#individualState.genome,
+		State#individualState.alphabet),
+	
 	{ok, Child1} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, State#individualState.genome),
+		State#individualState.fitness, NewGenome),
 	{ok, Child2} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, State#individualState.genome),
+		State#individualState.fitness, NewGenome),
 	Childs = [ Child1, Child2 ],
 	
 	NewState = State#individualState{
