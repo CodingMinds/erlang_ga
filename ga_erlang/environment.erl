@@ -151,7 +151,7 @@ fitness() ->
 evolution(Steps, Stepsize, Filename) when is_integer(Steps),
 	is_integer(Stepsize), Steps > 0, Stepsize > 0 ->
 	
-	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
 	
 	evolution(Steps, Stepsize, Filename, [Fitness]).
 
@@ -171,7 +171,7 @@ evolution(Steps, Stepsize, Filename, Acc) when is_integer(Steps),
 	gen_server:cast({global, environment}, {ticks, Stepsize}),
 	
 	tick_wait(),
-	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
 	NewAcc = Acc ++ [Fitness],
 	
 	evolution(Steps - 1, Stepsize, Filename, NewAcc);
