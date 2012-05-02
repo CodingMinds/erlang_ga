@@ -168,10 +168,10 @@ create_genome(_Alphabet, 0) ->
 %%----------------------------------------------------------------------
 mutate_genome(Genome, Alphabet) ->
 	Length = length(Genome),
-	Position = random:uniform(Length-1),
+	Position = random:uniform(Length),
 	
-	Head = lists:sublist(Genome, Position),
-	Tail = lists:sublist(Genome, Position+2, Length),
+	Head = lists:sublist(Genome, Position-1),
+	Tail = lists:sublist(Genome, Position+1, Length),
 	
 	Gene = element(random:uniform(tuple_size(Alphabet)), Alphabet),
 	
