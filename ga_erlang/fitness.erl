@@ -6,7 +6,7 @@ main([]) ->
 	net_adm:world(),
 	global:sync(),
 	
-	{stats, Fitness} = environment:stats(),
+	{fitness, Fitness} = environment:fitness(),
 	
 	FunFor = fun(X) ->
 		io:format("~w~n", [X])
@@ -18,7 +18,7 @@ main(["short"]) ->
 	net_adm:world(),
 	global:sync(),
 	
-	{stats, Fitness} = environment:stats(),
+	{fitness, Fitness} = environment:fitness(),
 	
 	io:format("~w~n", [lists:sum(Fitness)]);
 
@@ -28,5 +28,5 @@ main(_) ->
 
 % print usage and die
 usage() ->
-	io:format(standard_error, "usage: stats.erl [short]\n", []),
+	io:format(standard_error, "usage: fitness.erl [short]\n", []),
 	halt(1).
