@@ -68,15 +68,21 @@ start() ->
 	%%%% TODO:
 	%%%% Implement a really better first fitness function
 	%%%% cccc.. wins
+	
 	Fitness = fun(State) ->
+		Genome = State#individualState.genome,
 		FunMap = fun(X) ->
+			Gene = lists:nth(X, Genome),
 			if
-				X == a -> 1;
-				X == b -> 2;
-				X == c -> 3
+				Gene == a -> X;
+				Gene == b -> 2 * X;
+				Gene == c -> 3 * X
 			end
 		end,
-		MappedGenome = lists:map(FunMap, State#individualState.genome),
+		
+%%		MappedGenome = lists:map(FunMap, State#individualState.genome),
+		MappedGenome = lists:map(FunMap, lists:seq(1, length(Genome))),
+		
 		lists:sum(MappedGenome)
 	end,
 	
