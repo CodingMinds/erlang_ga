@@ -15,11 +15,11 @@
 %%%   Stops the environment
 %%% state()
 %%%   Returns internal states
-%%% stats()
-%%%   Returns the fitness of each individual
 %%% evolution(Steps, Stepsize, Filename)
 %%%   Simulates evolution with Steps * Stepsize and saves the results
 %%%   in Filename
+%%% fitness()
+%%%   Returns the fitness of each individual
 %%% gene_pool()
 %%%   Returns all genomes of the population
 %%% tick(Count)
@@ -53,7 +53,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, stats/0, evolution/3,
+-export([start/0, start/5, stop/0, state/0, evolution/3, fitness/0,
 	gene_pool/0, tick/1]).
 
 -include("records.hrl").
@@ -124,12 +124,21 @@ stop() -> gen_server:cast({global, environment}, stop).
 state() -> gen_server:call({global, environment}, state).
 
 %%----------------------------------------------------------------------
-%% Function: stats/0
+%% Function: fitness/0
 %% Purpose: Returns the fitness of each individual
 %% Args: -
-%% Returns: {stats, Fitness}
+%% Returns: {fitness, Fitness}
 %%----------------------------------------------------------------------
-stats() -> gen_server:call({global, environment}, stats).
+fitness() ->
+	{state, State} = gen_server:call({global, environment}, state),
+	FunMap = fun(Individual) ->
+		{_Pid, Fitness} = Individual,
+		Fitness
+	end,
+	Fitness = lists:map(FunMap, State#environmentState.population),
+	
+	{fitness, Fitness}.
+
 
 %%----------------------------------------------------------------------
 %% Function: evolution/3
@@ -295,22 +304,7 @@ create_population(_Alphabet, _Size, _Fitness, 0, Acc) ->
 %% Args: -
 %% Returns: {reply, {state, State}, State}.
 %%----------------------------------------------------------------------
-handle_call(state, _From, State) -> {reply, {state, State}, State};
-
-%%----------------------------------------------------------------------
-%% Function: handle_call/3
-%% Purpose: Returns the fitness of each individual
-%% Args: -
-%% Returns: {reply, {stats, Stats}, State}.
-%%----------------------------------------------------------------------
-handle_call(stats, _From, State) ->
-	FunMap = fun(Individual) ->
-		{_Pid, Fitness} = Individual,
-		Fitness
-	end,
-	Fitness = lists:map(FunMap, State#environmentState.population),
-	
-	{reply, {stats, Fitness}, State}.
+handle_call(state, _From, State) -> {reply, {state, State}, State}.
 
 %%----------------------------------------------------------------------
 %% Function: internal_tick/1
