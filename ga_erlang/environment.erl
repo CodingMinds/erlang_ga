@@ -17,6 +17,9 @@
 %%%   Returns internal states
 %%% stats()
 %%%   Returns the fitness of each individual
+%%% evolution(Steps, Stepsize, Filename)
+%%%   Simulates evolution with Steps * Stepsize and saves the results
+%%%   in Filename
 %%% tick(Count)
 %%%   Reuest and initializes the next Count cycles.
 %%% init([Alphabet, Size, Population, Mutation, Fitness])
@@ -47,7 +50,7 @@
 -behaviour(gen_server).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, stats/0, tick/1]).
+-export([start/0, start/5, stop/0, state/0, stats/0, evolution/3, tick/1]).
 
 -include("records.hrl").
 
@@ -114,9 +117,74 @@ state() -> gen_server:call({global, environment}, state).
 %% Function: stats/0
 %% Purpose: Returns the fitness of each individual
 %% Args: -
-%% Returns: {state, State}
+%% Returns: {stats, Fitness}
 %%----------------------------------------------------------------------
 stats() -> gen_server:call({global, environment}, stats).
+
+%%----------------------------------------------------------------------
+%% Function: evolution/3
+%% Purpose: A wrapper for evolution/4
+%% Args: Steps, the amount of meassured steps
+%%       and Stepsize, the amount of ticks within each step
+%%       and Filename, the file where the results should be saved
+%% Returns: {ok, Filename}
+%%----------------------------------------------------------------------
+evolution(Steps, Stepsize, Filename) when is_integer(Steps),
+	is_integer(Stepsize), Steps > 0, Stepsize > 0 ->
+	
+	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	
+	evolution(Steps, Stepsize, Filename, [Fitness]).
+
+%%----------------------------------------------------------------------
+%% Function: evolution/4
+%% Purpose: Simulates evolution with Steps * Stepsize and saves the
+%%          results in Filename
+%% Args: Steps, the amount of meassured steps
+%%       and Stepsize, the amount of ticks within each step
+%%       and Filename, the file where the results should be saved
+%%       and Acc, as result accumulator
+%% Returns: {ok, Filename}
+%%----------------------------------------------------------------------
+evolution(Steps, Stepsize, Filename, Acc) when is_integer(Steps),
+	is_integer(Stepsize), is_list(Acc), Steps > 0, Stepsize > 0 ->
+	
+	gen_server:cast({global, environment}, {ticks, Stepsize}),
+	
+	tick_wait(),
+	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	NewAcc = Acc ++ [Fitness],
+	
+	evolution(Steps - 1, Stepsize, Filename, NewAcc);
+
+evolution(0, _, Filename, Acc) ->
+	FunFor = fun(X) ->
+		Fitness = lists:sum(lists:nth(X, Acc)),
+		file:write_file(Filename, io_lib:fwrite("~w\t~w~n", [X-1, Fitness]),
+			[append])
+	end,
+	lists:foreach(FunFor, lists:seq(1, length(Acc))),
+	
+	{ok, Filename}.
+
+%%----------------------------------------------------------------------
+%% Function: tick_wait/0
+%% Purpose: "Wait" until all requestes ticks proceeded
+%% Returns: ok
+%%----------------------------------------------------------------------
+tick_wait() ->
+	{state, {environmentState, _, _, _, _, Ticks}} =
+		gen_server:call({global, environment}, state),
+	
+	if
+		Ticks == 0 ->
+			ok;
+		true ->
+			receive
+				after 500 -> ok
+			end,
+			tick_wait()
+	end.
 
 %%----------------------------------------------------------------------
 %% Function: tick/1
