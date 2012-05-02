@@ -20,6 +20,8 @@
 %%% evolution(Steps, Stepsize, Filename)
 %%%   Simulates evolution with Steps * Stepsize and saves the results
 %%%   in Filename
+%%% gene_pool()
+%%%   Returns all genomes of the population
 %%% tick(Count)
 %%%   Reuest and initializes the next Count cycles.
 %%% init([Alphabet, Size, Population, Mutation, Fitness])
@@ -49,8 +51,10 @@
 -author('GEEK1 <erlang@geek1.de>').
 -behaviour(gen_server).
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, stats/0, evolution/3, tick/1]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+	terminate/2, code_change/3]).
+-export([start/0, start/5, stop/0, state/0, stats/0, evolution/3,
+	gene_pool/0, tick/1]).
 
 -include("records.hrl").
 
@@ -194,6 +198,24 @@ tick_wait() ->
 %%----------------------------------------------------------------------
 tick(Count) when is_integer(Count), Count > 0 ->
 	gen_server:cast({global, environment}, {ticks, Count}).
+
+%%----------------------------------------------------------------------
+%% Function: gene_pool/0
+%% Purpose: Returns all genomes of the population
+%% Args: -
+%% Returns: {gene_pool, [Genomes]}.
+%%----------------------------------------------------------------------
+gene_pool() ->
+	{state, State} = gen_server:call({global, environment}, state),
+	
+	FunMap = fun(Individual) ->
+		{Pid, _Fitness} = Individual,
+		{state, IState} = individual:state(Pid),
+		IState#individualState.genome
+	end,
+	Genomes = lists:map(FunMap, State#environmentState.population),
+	
+	{gene_pool, Genomes}.
 
 %%----------------------------------------------------------------------
 %% Function: init/1
