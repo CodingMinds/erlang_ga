@@ -31,12 +31,15 @@
 %%%   reproduction or mutation.
 %%% handle_call(state, From, State)
 %%%   Interface for the behaviour gen_server. Returns internal states
+%%% handle_call(fitness, From, State)
+%%%   Interface for the behaviour gen_server. Returns the fitness of
+%%%   each individual
 %%% handle_cast(tick, From, State)
-%%%   Interface for the behaviour gen_server. Initializes the next cycle,
-%%%   if requested and the last one finished
+%%%   Interface for the behaviour gen_server. Initializes the next
+%%%   cycle, if requested and the last one finished
 %%% handle_cast({ticks, Count}, From, State)
-%%%   Interface for the behaviour gen_server. Request and initializes the
-%%%   next Count cycles
+%%%   Interface for the behaviour gen_server. Request and initializes
+%%%   the next Count cycles
 %%% handle_cast(stop, State)
 %%%   Interface for the behaviour gen_server. Kills the individual
 %%% handle_info(Message, State)
@@ -80,7 +83,6 @@ start() ->
 			end
 		end,
 		
-%%		MappedGenome = lists:map(FunMap, State#individualState.genome),
 		MappedGenome = lists:map(FunMap, lists:seq(1, length(Genome))),
 		
 		lists:sum(MappedGenome)
@@ -129,8 +131,15 @@ state() -> gen_server:call({global, environment}, state).
 %% Args: -
 %% Returns: {fitness, Fitness}
 %%----------------------------------------------------------------------
-fitness() ->
-	{state, State} = gen_server:call({global, environment}, state),
+fitness() -> gen_server:call({global, environment}, fitness).
+
+%%----------------------------------------------------------------------
+%% Function: fitness/1
+%% Purpose: Returns the fitness of each individual
+%% Args: State, the environment State
+%% Returns: {fitness, Fitness}
+%%----------------------------------------------------------------------
+fitness(State) ->
 	FunMap = fun(Individual) ->
 		{_Pid, Fitness} = Individual,
 		Fitness
@@ -138,7 +147,6 @@ fitness() ->
 	Fitness = lists:map(FunMap, State#environmentState.population),
 	
 	{fitness, Fitness}.
-
 
 %%----------------------------------------------------------------------
 %% Function: evolution/3
@@ -151,7 +159,7 @@ fitness() ->
 evolution(Steps, Stepsize, Filename) when is_integer(Steps),
 	is_integer(Stepsize), Steps > 0, Stepsize > 0 ->
 	
-	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
 	
 	evolution(Steps, Stepsize, Filename, [Fitness]).
 
@@ -171,7 +179,7 @@ evolution(Steps, Stepsize, Filename, Acc) when is_integer(Steps),
 	gen_server:cast({global, environment}, {ticks, Stepsize}),
 	
 	tick_wait(),
-	{stats, Fitness} = gen_server:call({global, environment}, stats),
+	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
 	NewAcc = Acc ++ [Fitness],
 	
 	evolution(Steps - 1, Stepsize, Filename, NewAcc);
@@ -185,6 +193,24 @@ evolution(0, _, Filename, Acc) ->
 	lists:foreach(FunFor, lists:seq(1, length(Acc))),
 	
 	{ok, Filename}.
+
+%%----------------------------------------------------------------------
+%% Function: gene_pool/0
+%% Purpose: Returns all genomes of the population
+%% Args: -
+%% Returns: {gene_pool, [Genomes]}.
+%%----------------------------------------------------------------------
+gene_pool() ->
+	{state, State} = gen_server:call({global, environment}, state),
+	
+	FunMap = fun(Individual) ->
+		{Pid, _Fitness} = Individual,
+		{state, IState} = individual:state(Pid),
+		IState#individualState.genome
+	end,
+	Genomes = lists:map(FunMap, State#environmentState.population),
+	
+	{gene_pool, Genomes}.
 
 %%----------------------------------------------------------------------
 %% Function: tick_wait/0
@@ -213,50 +239,6 @@ tick_wait() ->
 %%----------------------------------------------------------------------
 tick(Count) when is_integer(Count), Count > 0 ->
 	gen_server:cast({global, environment}, {ticks, Count}).
-
-%%----------------------------------------------------------------------
-%% Function: gene_pool/0
-%% Purpose: Returns all genomes of the population
-%% Args: -
-%% Returns: {gene_pool, [Genomes]}.
-%%----------------------------------------------------------------------
-gene_pool() ->
-	{state, State} = gen_server:call({global, environment}, state),
-	
-	FunMap = fun(Individual) ->
-		{Pid, _Fitness} = Individual,
-		{state, IState} = individual:state(Pid),
-		IState#individualState.genome
-	end,
-	Genomes = lists:map(FunMap, State#environmentState.population),
-	
-	{gene_pool, Genomes}.
-
-%%----------------------------------------------------------------------
-%% Function: init/1
-%% Purpose: Initializes the environment with a new population based on
-%%          the given Alphabet
-%% Args: Alphabet, the possible alphabet for the genomes
-%%       and Size, the size of the genomes of the new individuals
-%%       and Population, the size of the new population
-%%       and Mutation, the mutation rate (0.0 .. 1.0)
-%%       and Fitness, a fun for the fitness
-%% Returns: {ok, State}.
-%%----------------------------------------------------------------------
-init([Alphabet, Size, Population, Mutation, Fitness])
-	when is_tuple(Alphabet), is_integer(Size), is_integer(Population),
-	is_float(Mutation), is_function(Fitness), size(Alphabet) > 0,
-	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
-	
-	{A1,A2,A3} = now(),
-	random:seed(A1, A2, A3),
-	
-	{population, Pop} = create_population(Alphabet, Size, Fitness,
-		Population),
-	
-	State = #environmentState{mutation = Mutation, population = Pop},
-	
-	{ok, State}.
 
 %%----------------------------------------------------------------------
 %% Function: create_population/4
@@ -299,12 +281,48 @@ create_population(_Alphabet, _Size, _Fitness, 0, Acc) ->
 	{population, Acc}.
 
 %%----------------------------------------------------------------------
+%% Function: init/1
+%% Purpose: Initializes the environment with a new population based on
+%%          the given Alphabet
+%% Args: Alphabet, the possible alphabet for the genomes
+%%       and Size, the size of the genomes of the new individuals
+%%       and Population, the size of the new population
+%%       and Mutation, the mutation rate (0.0 .. 1.0)
+%%       and Fitness, a fun for the fitness
+%% Returns: {ok, State}.
+%%----------------------------------------------------------------------
+init([Alphabet, Size, Population, Mutation, Fitness])
+	when is_tuple(Alphabet), is_integer(Size), is_integer(Population),
+	is_float(Mutation), is_function(Fitness), size(Alphabet) > 0,
+	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
+	
+	{A1,A2,A3} = now(),
+	random:seed(A1, A2, A3),
+	
+	{population, Pop} = create_population(Alphabet, Size, Fitness,
+		Population),
+	
+	State = #environmentState{mutation = Mutation, population = Pop},
+	
+	{ok, State}.
+
+%%----------------------------------------------------------------------
 %% Function: handle_call/3
 %% Purpose: Returns internal state
 %% Args: -
 %% Returns: {reply, {state, State}, State}.
 %%----------------------------------------------------------------------
-handle_call(state, _From, State) -> {reply, {state, State}, State}.
+handle_call(state, _From, State) -> {reply, {state, State}, State};
+
+%%----------------------------------------------------------------------
+%% Function: handle_call/3
+%% Purpose: Returns the fitness of each individual
+%% Args: -
+%% Returns: {reply, {fitness, Fitness}, State}.
+%%----------------------------------------------------------------------
+handle_call(fitness, _From, State) ->
+	{fitness, Fitness} = fitness(State),
+	{reply, {fitness, Fitness}, State}.
 
 %%----------------------------------------------------------------------
 %% Function: internal_tick/1

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-STEPS=50
-STEPSIZE=1000
+STEPS=500
+STEPSIZE=100
 PREFIX=default_
 
 _COUNT=0
