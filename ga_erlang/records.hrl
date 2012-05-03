@@ -19,3 +19,10 @@
 %%----------------------------------------------------------------------
 -record(environmentState, {population = [], new_population = [],
 	mutation = 0.0, age = 0, ticks = 0}).
+
+%%---------------------------------------------------------------------
+%% Data Type: monitorState
+%% where:
+%%    filename: A String (default is undefined).
+%%----------------------------------------------------------------------
+-record(monitorState, {filename}).

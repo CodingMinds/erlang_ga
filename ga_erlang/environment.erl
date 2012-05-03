@@ -1,7 +1,7 @@
 %%%---------------------------------------------------------------------
 %%% Description module environment
 %%%---------------------------------------------------------------------
-%%% The environment , which uses the behaviour gen_server to provide the
+%%% The environment, which uses the behaviour gen_server to provide the
 %%% functionality and interfaces
 %%%---------------------------------------------------------------------
 %%% Exports
@@ -15,9 +15,6 @@
 %%%   Stops the environment
 %%% state()
 %%%   Returns internal states
-%%% evolution(Steps, Stepsize, Filename)
-%%%   Simulates evolution with Steps * Stepsize and saves the results
-%%%   in Filename
 %%% fitness()
 %%%   Returns the fitness of each individual
 %%% gene_pool()
@@ -56,8 +53,8 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, evolution/3, fitness/0,
-	gene_pool/0, tick/1]).
+-export([start/0, start/5, stop/0, state/0, fitness/0, gene_pool/0,
+	tick/1]).
 
 -include("records.hrl").
 
@@ -149,52 +146,6 @@ fitness(State) ->
 	{fitness, Fitness}.
 
 %%----------------------------------------------------------------------
-%% Function: evolution/3
-%% Purpose: A wrapper for evolution/4
-%% Args: Steps, the amount of meassured steps
-%%       and Stepsize, the amount of ticks within each step
-%%       and Filename, the file where the results should be saved
-%% Returns: {ok, Filename}
-%%----------------------------------------------------------------------
-evolution(Steps, Stepsize, Filename) when is_integer(Steps),
-	is_integer(Stepsize), Steps > 0, Stepsize > 0 ->
-	
-	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
-	
-	evolution(Steps, Stepsize, Filename, [Fitness]).
-
-%%----------------------------------------------------------------------
-%% Function: evolution/4
-%% Purpose: Simulates evolution with Steps * Stepsize and saves the
-%%          results in Filename
-%% Args: Steps, the amount of meassured steps
-%%       and Stepsize, the amount of ticks within each step
-%%       and Filename, the file where the results should be saved
-%%       and Acc, as result accumulator
-%% Returns: {ok, Filename}
-%%----------------------------------------------------------------------
-evolution(Steps, Stepsize, Filename, Acc) when is_integer(Steps),
-	is_integer(Stepsize), is_list(Acc), Steps > 0, Stepsize > 0 ->
-	
-	gen_server:cast({global, environment}, {ticks, Stepsize}),
-	
-	tick_wait(),
-	{fitness, Fitness} = gen_server:call({global, environment}, fitness),
-	NewAcc = Acc ++ [Fitness],
-	
-	evolution(Steps - 1, Stepsize, Filename, NewAcc);
-
-evolution(0, _, Filename, Acc) ->
-	FunFor = fun(X) ->
-		Fitness = lists:sum(lists:nth(X, Acc)),
-		file:write_file(Filename, io_lib:fwrite("~w\t~w~n", [X-1, Fitness]),
-			[append])
-	end,
-	lists:foreach(FunFor, lists:seq(1, length(Acc))),
-	
-	{ok, Filename}.
-
-%%----------------------------------------------------------------------
 %% Function: gene_pool/0
 %% Purpose: Returns all genomes of the population
 %% Args: -
@@ -211,25 +162,6 @@ gene_pool() ->
 	Genomes = lists:map(FunMap, State#environmentState.population),
 	
 	{gene_pool, Genomes}.
-
-%%----------------------------------------------------------------------
-%% Function: tick_wait/0
-%% Purpose: "Wait" until all requestes ticks proceeded
-%% Returns: ok
-%%----------------------------------------------------------------------
-tick_wait() ->
-	{state, {environmentState, _, _, _, _, Ticks}} =
-		gen_server:call({global, environment}, state),
-	
-	if
-		Ticks == 0 ->
-			ok;
-		true ->
-			receive
-				after 500 -> ok
-			end,
-			tick_wait()
-	end.
 
 %%----------------------------------------------------------------------
 %% Function: tick/1
@@ -304,6 +236,8 @@ init([Alphabet, Size, Population, Mutation, Fitness])
 	
 	State = #environmentState{mutation = Mutation, population = Pop},
 	
+	gen_server:cast({global, monitor}, {population, 0, Pop}),
+
 	{ok, State}.
 
 %%----------------------------------------------------------------------
@@ -374,7 +308,9 @@ internal_tick(State) ->
 
 %%----------------------------------------------------------------------
 %% Function: finish_cycle/1
-%% Purpose: Check if the actual cycle is finished and clean up
+%% Purpose: Check if the actual cycle is finished and clean up.
+%%          Sends additionally a call to a global monitor, which can
+%%          then generate some statistics
 %% Args: State, the actual State
 %% Returns: {ok, NewState}.
 %%----------------------------------------------------------------------
@@ -388,6 +324,10 @@ finish_cycle(State) ->
 			},
 			
 			gen_server:cast({global, environment}, tick),
+			
+			gen_server:cast({global, monitor}, {population,
+				NewState#environmentState.age,
+				NewState#environmentState.population}),
 			
 			{ok, NewState};
 		true ->
