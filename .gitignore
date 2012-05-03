@@ -1,3 +1,6 @@
 .DS_Store
 *.beam
 erl_crash.dump
+
+default_results
+default_results.png
