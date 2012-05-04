@@ -69,7 +69,7 @@ start() ->
 	%%%% Implement a really better first fitness function
 	%%%% cccc.. wins
 	
-	Fitness2 = fun(State) ->
+	Fitness = fun(State) ->
 		{individualState, _, _, Genome, _} = State,
 		
 		FunMap = fun(X) ->
