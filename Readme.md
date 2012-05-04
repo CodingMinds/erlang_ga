@@ -54,6 +54,7 @@ For further details check the source code annotations.
 ## Performance
 
 Intel(R) Core(TM) i7 CPU 950 @ 3.07GHz (mostly idle):
+
 100,000 cycles with default parameters are computed in round about 4 minutes.
 
 ## Licence
