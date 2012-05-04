@@ -69,23 +69,20 @@ start() ->
 	%%%% Implement a really better first fitness function
 	%%%% cccc.. wins
 	
-	Fitness = fun(State) ->
-		Genome = State#individualState.genome,
+	Fitness2 = fun(State) ->
+		{individualState, _, _, Genome, _} = State,
+		
 		FunMap = fun(X) ->
-			Gene = lists:nth(X, Genome),
-			if
-				Gene == a -> X;
-				Gene == b -> 2 * X;
-				Gene == c -> 3 * X
-			end
+			integer_to_list(X)
 		end,
+		Decimal = list_to_integer(
+			string:join(lists:map(FunMap, Genome), "")
+			, 2),
 		
-		MappedGenome = lists:map(FunMap, lists:seq(1, length(Genome))),
-		
-		lists:sum(MappedGenome)
+		Decimal * Decimal
 	end,
 	
-	start({a,b,c}, 7, 12, 0.2, Fitness).
+	start({0,1}, 8, 10, 0.2, Fitness).
 
 %%----------------------------------------------------------------------
 %% Function: start/5
