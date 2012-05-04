@@ -16,19 +16,19 @@ The gen_server which holds the population and manages the individuals
 A simple monitor which writes some statistics to a plain text file
 This file can be plot with
 ```sh
-gnuplot simple.plot
+$ gnuplot simple.plot
 ```
 
 ## Usage
 
 Before the first run (or after sourcecode modifications) you need to compile the .erl files
 ```sh
-erlc environment.erl individual.erl monitor.erl
+$ erlc environment.erl individual.erl monitor.erl
 ```
 
 To start the simple default environment use
 ```sh
-erl -s monitor start -s environment start
+$ erl -s monitor start -s environment start
 ```
 
 and initialize evolution with
