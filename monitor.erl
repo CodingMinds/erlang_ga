@@ -119,10 +119,7 @@ handle_cast({population, Age, Population}, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) ->
-	gen_server:cast({global, environment}, {dead, self()}),
-	
-	{stop, normal, State}.
+handle_cast(stop, State) -> {stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *

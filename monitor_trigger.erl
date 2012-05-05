@@ -148,17 +148,23 @@ handle_cast({population, Age, Population}, State) ->
 		{_Pid, Fitness} = Individual,
 		Fitness
 	end,
-	Fitness = lists:sum(lists:map(FunMap, Population)),
 	
 	if
-		State#monitorState.call_format ->
-			Command = io_lib:format(State#monitorState.command, [Age, Fitness,
-				Population]);
+		Age rem State#monitorState.divisor == 0 ->
+			Fitness = lists:sum(lists:map(FunMap, Population)),
+			
+			if
+				State#monitorState.call_format ->
+					Command = io_lib:format(State#monitorState.command, [Age, Fitness,
+						Population]);
+				true ->
+					Command = State#monitorState.command
+			end,
+			
+			os:cmd(Command);
 		true ->
-			Command = State#monitorState.command
+			ok
 	end,
-	
-	os:cmd(Command),
 	
 	{noreply, State};
 
@@ -168,10 +174,7 @@ handle_cast({population, Age, Population}, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) ->
-	gen_server:cast({global, environment}, {dead, self()}),
-	
-	{stop, normal, State}.
+handle_cast(stop, State) -> {stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *
