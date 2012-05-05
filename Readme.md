@@ -24,7 +24,7 @@ $ gnuplot simple.plot
 ## Usage
 
 Before the first run (or after sourcecode modifications) you need to compile the .erl files.
-This can be doen by hand
+This can be done by hand
 ```sh
 $ erlc environment.erl individual.erl monitor.erl
 ```
