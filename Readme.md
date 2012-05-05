@@ -4,7 +4,9 @@ Genetic Algorithm (Erlang)
 ## Description
 A simple genetic algorithm where each genome / individual is a single process.
 
-Hint: Implementation without crossover !
+The crossover implementation can only handle populations which are divisible by four.
+Other populations will also be processed, but mixed up with simple cloned individuals. If
+crossover isn't enabled there are no restrictions.
 
 ## Structure
 
@@ -21,9 +23,14 @@ gnuplot simple.plot
 
 ## Usage
 
-Before the first run (or after sourcecode modifications) you need to compile the .erl files
+Before the first run (or after sourcecode modifications) you need to compile the .erl files.
+This can be doen by hand
 ```sh
 erlc environment.erl individual.erl monitor.erl
+```
+or with the include make file
+```sh
+$ make
 ```
 
 To start the simple default environment use

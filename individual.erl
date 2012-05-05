@@ -21,11 +21,12 @@
 %%%   Interface for the behaviour gen_server.
 %%% init([random, Alphabet, Fitness, Size])
 %%%   Interface for the behaviour gen_server.
-%%% handle_cast({reproduce}, State)
-%%%   Interface for the behaviour gen_server. Initializes reproduction
-%%% handle_cast({mutate}, State)
-%%%   Interface for the behaviour gen_server. Initializes reproduction
-%%%   with mutation.
+%%% handle_cast({reproduce, Mutation}, State)
+%%%   Interface for the behaviour gen_server. Initializes reproduction,
+%%%   maybe with mutation.
+%%% handle_cast({crossover, Mutation, Partner}, State)
+%%%   Interface for the behaviour gen_server. Initializes crossover,
+%%%   maybe with mutation.
 %%% handle_call(state, From, State)
 %%%   Interface for the behaviour gen_server. Returns internal states
 %%% handle_cast(stop, State)
@@ -180,6 +181,81 @@ mutate_genome(Genome, Alphabet) ->
 	{genome, NewGenome}.
 
 %%----------------------------------------------------------------------
+%% Function: mixup_genomes/2
+%% Purpose: Mixup the given genomes
+%% Args: GenomeA, the first genome
+%%       and GenomeB, the second genome
+%% Returns: {ok, NewGenome}.
+%%----------------------------------------------------------------------
+mixup_genomes(GenomeA, GenomeB) ->
+	Position = round(length(GenomeA)/2),
+	
+	{Head, _Tail} = lists:split(Position, GenomeA),
+	{_Head, Tail} = lists:split(Position, GenomeB),
+	
+	NewGenome = Head ++ Tail,
+	
+	{genome, NewGenome}.
+
+%%----------------------------------------------------------------------
+%% Function: mutate_childs/1
+%% Purpose: Decide if it's time for a mutation and do it
+%% Args: MutationRate, the mutation rate
+%%       and Genomes, the genomes which could mutate
+%%       and state, the actual state
+%% Returns: {mutation, Genomes}
+%%----------------------------------------------------------------------
+mutate_childs(MutationRate, Genomes, State) ->
+	if
+		MutationRate > 0.0 ->
+			Mutation = random:uniform() =< MutationRate;
+		true ->
+			Mutation = false
+	end,
+
+	Position = round(random:uniform(length(Genomes))),
+	
+	if
+		Mutation ->
+			Genome = lists:nth(Position, Genomes),
+			{genome, MutatedGenome} = mutate_genome(Genome,
+				State#individualState.alphabet),
+			{mutated, lists:delete(Genome, Genomes) ++ [MutatedGenome]};
+		true ->
+			{mutated, Genomes}
+	end.
+	
+%%----------------------------------------------------------------------
+%% Function: reproduce/1
+%% Purpose: Create new individuals based on the given genomes
+%% Args: Genomes, the list of genomes which shoudl spwan new individuals
+%%       and MutationRate, the mutation rate
+%%       and State, the actual state
+%% Returns: ok
+%%----------------------------------------------------------------------
+spawn_childs(Genomes, MutationRate, State) ->
+	% mutate if neccesary
+	{mutated, NewGenomes} = mutate_childs(MutationRate,
+		Genomes, State),
+	
+	% create childs
+	FunMap = fun(Genome) ->
+		{ok, Child} = start(predefined, State#individualState.alphabet,
+			State#individualState.fitness, Genome),
+		{fitness, Fitness} = gen_server:call(Child, fitness),
+		
+		{Child, Fitness}
+	end,
+	
+	Childs = lists:map(FunMap, NewGenomes),
+	
+	% casts
+	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
+	%%%gen_server:cast({global, environment}, {killme, self()}),
+	
+	ok.
+
+%%----------------------------------------------------------------------
 %% Function: handle_call/3
 %% Purpose: Returns internal state
 %% Args: -
@@ -196,52 +272,61 @@ handle_call(state, _From, State) -> {reply, {state, State}, State};
 handle_call(fitness, _From, State) ->
 	Fun = State#individualState.fitness,
 	Fitness = Fun(State),
-	{reply, {fitness, Fitness}, State}.
+	
+	{reply, {fitness, Fitness}, State};
+
+%%----------------------------------------------------------------------
+%% Function: handle_call/3
+%% Purpose: Returns the Genome and commits suicide
+%% Args: -
+%% Returns: {reply, {genome, Genome}, State}.
+%%----------------------------------------------------------------------
+handle_call(crossover_request, _From, State) ->
+	Genome = State#individualState.genome,
+	gen_server:cast({global, environment}, {killme, self()}),
+	
+	{reply, {genome, Genome}, State}.
 
 %%----------------------------------------------------------------------
 %% Function: handle_cast/2
-%% Purpose: Reproduce itself and report childs to initiator
+%% Purpose: Reproduce itself and report childs to initiator. If mutation
+%%          is requested, only one child will mutate.
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast(reproduce, State) ->
-	{ok, Child1} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, State#individualState.genome),
-	{ok, Child2} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, State#individualState.genome),
-	Childs = [ Child1, Child2 ],
+handle_cast({clone, MutationRate}, State) ->
+	Genome = State#individualState.genome,
+	
+	spawn_childs([Genome, Genome], MutationRate, State),
 	
 	NewState = State#individualState{
 		age = State#individualState.age + 1
 	},
-	
-	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
-	gen_server:cast(self(), stop),
 	
 	{noreply, NewState};
 
 %%----------------------------------------------------------------------
 %% Function: handle_cast/2
-%% Purpose: Reproduce itself and report mutated childs to initiator
+%% Purpose: Crossover and report the childs to initiator. If mutation is
+%%          requested, only one child will mutate.
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast(mutate, State) ->
-	{genome, NewGenome} = mutate_genome(State#individualState.genome,
-		State#individualState.alphabet),
+handle_cast({crossover, MutationRate, Partner}, State) ->
+	Genome = State#individualState.genome,
 	
-	{ok, Child1} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, NewGenome),
-	{ok, Child2} = start(predefined, State#individualState.alphabet,
-		State#individualState.fitness, NewGenome),
-	Childs = [ Child1, Child2 ],
+	{genome, PartnerGenome} = gen_server:call(Partner, crossover_request),
 	
+	{genome, GenomeA} = mixup_genomes(Genome, PartnerGenome),
+	{genome, GenomeB} = mixup_genomes(PartnerGenome, Genome),
+	
+	% two childs for each individual
+	spawn_childs([GenomeA, GenomeB, GenomeA, GenomeB], MutationRate,
+		State),
+
 	NewState = State#individualState{
 		age = State#individualState.age + 1
 	},
-	
-	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
-	gen_server:cast(self(), stop),
 	
 	{noreply, NewState};
 
@@ -251,10 +336,7 @@ handle_cast(mutate, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) ->
-	gen_server:cast({global, environment}, {dead, self()}),
-	
-	{stop, normal, State}.
+handle_cast(stop, State) -> {stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *

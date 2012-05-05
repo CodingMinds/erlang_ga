@@ -9,7 +9,7 @@
 %%% start()
 %%%   Initializes the environment with a new population based on
 %%%   default values
-%%% start(Alphabet, Size, Population, Mutation, Fitness)
+%%% start(Alphabet, Size, Population, Mutation, Fitness, Options)
 %%%   Initializes the environment with a new population
 %%% stop()
 %%%   Stops the environment
@@ -23,7 +23,7 @@
 %%%   Reuest and initializes the next Count cycles.
 %%% init([Alphabet, Size, Population, Mutation, Fitness])
 %%%   Interface for the behaviour gen_server.
-%%% handle_cast({reproduced, IState, Childs}, From, State)
+%%% handle_cast({reproduced, Parent, Childs}, From, State)
 %%%   Interface for the behaviour gen_server. Handles the result of a
 %%%   reproduction or mutation.
 %%% handle_call(state, From, State)
@@ -53,7 +53,7 @@
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3]).
--export([start/0, start/5, stop/0, state/0, fitness/0, gene_pool/0,
+-export([start/0, start/6, stop/0, state/0, fitness/0, gene_pool/0,
 	tick/1]).
 
 -include("records.hrl").
@@ -67,7 +67,7 @@
 start() ->
 	%%%% TODO:
 	%%%% Implement a really better first fitness function
-	%%%% cccc.. wins
+	%%%% 1111.. wins
 	
 	Fitness = fun(State) ->
 		{individualState, _, _, Genome, _} = State,
@@ -82,10 +82,10 @@ start() ->
 		Decimal * Decimal
 	end,
 	
-	start({0,1}, 8, 10, 0.2, Fitness).
+	start({0,1}, 8, 10, 0.2, Fitness, [crossover]).
 
 %%----------------------------------------------------------------------
-%% Function: start/5
+%% Function: start/6
 %% Purpose: Calls gen_server:start_link/3 with alphabet, size the
 %%          population amount, the mutation rate and a fittnes function.
 %%          Register the gen_server to the global name environment
@@ -94,14 +94,17 @@ start() ->
 %%       and Population, the size fo the new population
 %%       and Mutation, the mutation rate (0.0 .. 1.0)
 %%       and Fitness, a fun for the fitness
+%%       and Options, as a list of atoms which define the behaviour of
+%%         the genetic algorithm
 %% Returns: {ok,Pid} | ignore | {error,Error}
 %%----------------------------------------------------------------------
-start(Alphabet, Size, Population, Mutation, Fitness)
+start(Alphabet, Size, Population, Mutation, Fitness, Options)
 	when is_tuple(Alphabet), is_function(Fitness), is_float(Mutation),
-	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
+	is_list(Options), Size > 0, Population > 0, Mutation >= 0.0,
+	Mutation =< 1.0 ->
 	
 	gen_server:start_link({global, environment}, ?MODULE, [Alphabet, Size,
-		Population, Mutation, Fitness], []).
+		Population, Mutation, Fitness, Options], []).
   
 %%----------------------------------------------------------------------
 %% Function: stop/0
@@ -218,9 +221,11 @@ create_population(_Alphabet, _Size, _Fitness, 0, Acc) ->
 %%       and Population, the size of the new population
 %%       and Mutation, the mutation rate (0.0 .. 1.0)
 %%       and Fitness, a fun for the fitness
+%%       and Options, as a list of atoms which define the behaviour of
+%%         the genetic algorithm
 %% Returns: {ok, State}.
 %%----------------------------------------------------------------------
-init([Alphabet, Size, Population, Mutation, Fitness])
+init([Alphabet, Size, Population, Mutation, Fitness, Options])
 	when is_tuple(Alphabet), is_integer(Size), is_integer(Population),
 	is_float(Mutation), is_function(Fitness), size(Alphabet) > 0,
 	Size > 0, Population > 0, Mutation >= 0.0, Mutation =< 1.0 ->
@@ -231,11 +236,31 @@ init([Alphabet, Size, Population, Mutation, Fitness])
 	{population, Pop} = create_population(Alphabet, Size, Fitness,
 		Population),
 	
-	State = #environmentState{mutation = Mutation, population = Pop},
+	DefaultState = #environmentState{mutation = Mutation, population = Pop},
+	{state, State} = evaluate_options(Options, DefaultState),
 	
 	gen_server:cast({global, monitor}, {population, 0, Pop}),
 
 	{ok, State}.
+
+%%----------------------------------------------------------------------
+%% Function: evaluate_options/2
+%% Purpose: Evaluates the given options and set the corresponding state
+%%          flags
+%% Args: Options, the given list with options
+%%       and State, the actual state
+%% Returns: {state, NewState}.
+%%----------------------------------------------------------------------
+evaluate_options(Options, State) when is_list(Options) ->
+	FunCrossover = fun(X) ->
+		X == crossover
+	end,
+	
+	Crossover = lists:any(FunCrossover, Options),
+	
+	State1 = State#environmentState{crossover = Crossover},
+	
+	{state, State1}.
 
 %%----------------------------------------------------------------------
 %% Function: handle_call/3
@@ -271,18 +296,47 @@ internal_tick(State) ->
 		State#environmentState.population),
 	
 	% reproduce good ones and kill bad ones
-	{Reproduce, Kill} = lists:split(round(length(SortedPopulation)/2),
-		SortedPopulation),
+	Length = round(length(SortedPopulation)/2),
+	{AllGoodOnes, BadOnes} = lists:split(Length, SortedPopulation),
 	
-	% fun - trigger reproduction
-	FunReproduce = fun(Individual) ->
+	% fun - trigger clone
+	FunClone = fun(Individual) ->
 		{Pid, _} = Individual,
-		Mutation = random:uniform(),
+		
+		gen_server:cast(Pid, {clone,
+			State#environmentState.mutation})
+	end,
+	
+	%% this implementation of crossover can only handle populations
+	%% which are dividable by 4. as workaround we clone the last one
+	%% of the good ones and only crossover the other good ones
+	if
+		State#environmentState.crossover =:= true ->
+			if
+				Length rem 2 == 1 ->
+					Individual = lists:last(AllGoodOnes),
+					GoodOnes = lists:delete(Individual, AllGoodOnes),
+					FunClone(Individual);
+				true ->
+					GoodOnes = AllGoodOnes
+			end;
+		true ->
+			GoodOnes = AllGoodOnes
+	end,
+	
+	% fun - trigger crossover
+	%% only odd ones will be triggered
+	FunCrossover = fun(N) ->
+		{Pid, _} = lists:nth(N, GoodOnes),
+		
+		% select partner
 		if
-			Mutation =< State#environmentState.mutation ->
-				gen_server:cast(Pid, mutate);
+			N rem 2 == 1 ->
+				{Partner, _} = lists:nth(N+1, GoodOnes),
+				gen_server:cast(Pid, {crossover,
+					State#environmentState.mutation, Partner});
 			true ->
-				gen_server:cast(Pid, reproduce)
+				true
 		end
 	end,
 	
@@ -293,35 +347,52 @@ internal_tick(State) ->
 	end,
 	
 	% call triggers
-	lists:foreach(FunReproduce, Reproduce),
-	lists:foreach(FunKill, Kill),
+	lists:foreach(FunKill, BadOnes),
+	if
+		State#environmentState.crossover ->
+			lists:foreach(FunCrossover, lists:seq(1, length(GoodOnes)));
+		true ->
+			lists:foreach(FunClone, GoodOnes)
+	end,
 	
+	% update state
 	NewState = State#environmentState{
-		population = Reproduce,
+		population = GoodOnes,
 		ticks = State#environmentState.ticks - 1
 	},
 	
 	{ok, NewState}.
 
 %%----------------------------------------------------------------------
-%% Function: finish_cycle/1
-%% Purpose: Check if the actual cycle is finished and clean up.
+%% Function: finish_tick/1
+%% Purpose: Check if the actual tick is finished and clean up.
 %%          Sends additionally a call to a global monitor, which can
 %%          then generate some statistics
 %% Args: State, the actual State
 %% Returns: {ok, NewState}.
 %%----------------------------------------------------------------------
-finish_cycle(State) ->
+finish_tick(State) ->
+	FunFor = fun(Pid) ->
+		gen_server:cast(Pid, stop)
+	end,
+	
 	if
 		length(State#environmentState.population) == 0 ->
+			% kill all individuals who requested it
+			lists:foreach(FunFor, State#environmentState.killlist),
+			
+			% update state
 			NewState = State#environmentState{
 				population = State#environmentState.new_population,
 				new_population = [],
+				killlist = [],
 				age = State#environmentState.age + 1
 			},
 			
-			gen_server:cast({global, environment}, tick),
+			% request next tick
+			gen_server:cast(self(), tick),
 			
+			% inform monitor
 			gen_server:cast({global, monitor}, {population,
 				NewState#environmentState.age,
 				NewState#environmentState.population}),
@@ -359,7 +430,7 @@ handle_cast({ticks, Count}, State) ->
 		ticks = State#environmentState.ticks + Count
 	},
 	
-	gen_server:cast({global, environment}, tick),
+	gen_server:cast(self(), tick),
 	
 	{noreply, NewState};
 
@@ -369,23 +440,17 @@ handle_cast({ticks, Count}, State) ->
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast({reproduced, _Parent, Childs}, State) ->
-	%%%% TODO: y? {badrecord,environmentState} if State..-- or State..++
-	FunMap = fun(Child) ->
-		{fitness, Fit} = individual:fitness(Child),
-		{Child, Fit}
-	end,
-	
-	Childs2 = lists:map(FunMap, Childs),
-	
+handle_cast({reproduced, Parent, Childs}, State) ->
 	StateNewPopulation = State#environmentState.new_population,
-	NewPopulation = StateNewPopulation ++ Childs2,
+	NewPopulation = StateNewPopulation ++ Childs,
 
 	NewState = State#environmentState{
 		new_population = NewPopulation
 	},
 	
-	{ok, NewState2} = finish_cycle(NewState),
+	gen_server:cast(self(), {killme, Parent}),
+	
+	{ok, NewState2} = finish_tick(NewState),
 	
 	{noreply, NewState2};
 
@@ -395,7 +460,7 @@ handle_cast({reproduced, _Parent, Childs}, State) ->
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast({dead, Individual}, State) ->
+handle_cast({killme, Individual}, State) ->
 	FunFilter = fun(Ind) ->
 		{Pid, _Fitness} = Ind,
 		if
@@ -406,12 +471,15 @@ handle_cast({dead, Individual}, State) ->
 		end
 	end,
 	Population = lists:filter(FunFilter, State#environmentState.population),
-
+	
+	Killlist = State#environmentState.killlist,
+	
 	NewState = State#environmentState{
-		population = Population
+		population = Population,
+		killlist = Killlist ++ [Individual]
 	},
 	
-	{ok, NewState2} = finish_cycle(NewState),
+	{ok, NewState2} = finish_tick(NewState),
 	
 	{noreply, NewState2};
 
