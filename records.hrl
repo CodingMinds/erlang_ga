@@ -27,5 +27,9 @@
 %% Data Type: monitorState
 %% where:
 %%    filename: A String (default is undefined).
+%%    command: A String (default is undefined).
+%%    divisor: An integer (default is 1).
+%%    call_format: A boolean (default is false).
 %%----------------------------------------------------------------------
--record(monitorState, {filename}).
+-record(monitorState, {filename, command, divisor = 1,
+	call_format = false}).

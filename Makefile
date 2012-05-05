@@ -1,6 +1,6 @@
 # target: all   	- Default target. Compiles .erl files
 all:
-	erlc environment.erl individual.erl monitor.erl
+	erlc environment.erl individual.erl monitor.erl monitor_trigger.erl
 
 # target: clean 	- Remove compilation results
 clean:

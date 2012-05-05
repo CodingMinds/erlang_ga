@@ -12,14 +12,27 @@ crossover isn't enabled there are no restrictions.
 
 #### individual.erl
 The gen_server which represents the indivdiual
+
 #### environment.erl
 The gen_server which holds the population and manages the individuals
+
 #### monitor.erl
 A simple monitor which writes some statistics to a plain text file
 This file can be plot with
 ```sh
 $ gnuplot simple.plot
 ```
+
+#### monitor_trigger.erl
+A simple monitor which can be used to trigger external events or write special formated
+statistics.
+The following example writes each 10 ticks the tickcount and the fitness to the file
+special_statistics:
+```erlang
+monitor_trigger:start("echo ~w ~w~i >> special_statistics", 10, format).
+```
+
+For more details check the header of the module.
 
 ## Usage
 
