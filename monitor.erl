@@ -1,5 +1,5 @@
 %%%---------------------------------------------------------------------
-%%% Description module monitorr
+%%% Description module monitor
 %%%---------------------------------------------------------------------
 %%% A monitor which cummulate a file with stats abaout the population
 %%% and the fitness
