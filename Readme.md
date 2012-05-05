@@ -28,7 +28,7 @@ This can be done by hand
 ```sh
 $ erlc environment.erl individual.erl monitor.erl
 ```
-or with the include make file
+or with the include makefile
 ```sh
 $ make
 ```
