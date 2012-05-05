@@ -18,7 +18,7 @@ The gen_server which holds the population and manages the individuals
 A simple monitor which writes some statistics to a plain text file
 This file can be plot with
 ```sh
-gnuplot simple.plot
+$ gnuplot simple.plot
 ```
 
 ## Usage
@@ -26,7 +26,7 @@ gnuplot simple.plot
 Before the first run (or after sourcecode modifications) you need to compile the .erl files.
 This can be doen by hand
 ```sh
-erlc environment.erl individual.erl monitor.erl
+$ erlc environment.erl individual.erl monitor.erl
 ```
 or with the include make file
 ```sh
@@ -35,7 +35,7 @@ $ make
 
 To start the simple default environment use
 ```sh
-erl -s monitor start -s environment start
+$ erl -s monitor start -s environment start
 ```
 
 and initialize evolution with
@@ -57,6 +57,12 @@ environment:fitness().
 .
 
 For further details check the source code annotations.
+
+## Performance
+
+Intel(R) Core(TM) i7 CPU 950 @ 3.07GHz (mostly idle):
+
+100,000 cycles with default parameters are computed in round about 4 minutes.
 
 ## Licence
 [GNU General Public License v3](http://www.gnu.org/licenses/gpl.html)
