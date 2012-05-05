@@ -4,9 +4,9 @@ Genetic Algorithm (Erlang)
 ## Description
 A simple genetic algorithm where each genome / individual is a single process.
 
-The crossover implementation can only handle populations which are divisible by four.
-Other populations will also be processed, but mixed up with simple cloned individuals. If
-crossover isn't enabled there are no restrictions.
+The crossover implementation can only handle populations which are divisible by
+four. Other populations will also be processed, but mixed up with simple cloned
+individuals. If crossover isn't enabled there are no restrictions.
 
 ## Structure
 
@@ -24,20 +24,21 @@ $ gnuplot simple.plot
 ```
 
 #### monitor_trigger.erl
-A simple monitor which can be used to trigger external events or write special formated
-statistics.
-The following example writes each 10 ticks the tickcount and the fitness to the file
-special_statistics:
+A simple monitor which can be used to trigger external events or write special
+formated statistics.
+The following example writes each 10 ticks the tickcount and the unix timestamp
+to the file special_statistics:
 ```erlang
-monitor_trigger:start("echo ~w ~w~i >> special_statistics", 10, format).
+monitor_trigger:start("echo -n ~w~i~i >> special_statistics; date '+ %s'
+>> special_statistics", 10, format). 
 ```
 
 For more details check the header of the module.
 
 ## Usage
 
-Before the first run (or after sourcecode modifications) you need to compile the .erl files.
-This can be done by hand
+Before the first run (or after sourcecode modifications) you need to compile the
+.erl files. This can be done by hand
 ```sh
 $ erlc environment.erl individual.erl monitor.erl
 ```
@@ -67,7 +68,6 @@ or
 ```erlang
 environment:fitness().
 ```
-.
 
 For further details check the source code annotations.
 
