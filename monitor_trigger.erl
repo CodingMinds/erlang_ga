@@ -158,7 +158,7 @@ handle_cast({population, Age, Population}, State) ->
 			Command = State#monitorState.command
 	end,
 	
-	RetValue = os:cmd(Command),
+	os:cmd(Command),
 	
 	{noreply, State};
 
