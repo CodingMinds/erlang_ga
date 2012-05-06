@@ -251,7 +251,6 @@ spawn_childs(Genomes, MutationRate, State) ->
 	
 	% casts
 	gen_server:cast({global, environment}, {reproduced, self(), Childs}),
-	%%%gen_server:cast({global, environment}, {killme, self()}),
 	
 	ok.
 
@@ -283,7 +282,7 @@ handle_call(fitness, _From, State) ->
 %%----------------------------------------------------------------------
 handle_call(crossover_request, _From, State) ->
 	Genome = State#individualState.genome,
-	gen_server:cast({global, environment}, {killme, self()}),
+	gen_server:cast(self(), stop),
 	
 	{reply, {genome, Genome}, State}.
 
@@ -336,7 +335,9 @@ handle_cast({crossover, MutationRate, Partner}, State) ->
 %% Args: -
 %% Returns: {stop, normal, State}.
 %%----------------------------------------------------------------------
-handle_cast(stop, State) -> {stop, normal, State}.
+handle_cast(stop, State) ->
+	gen_server:cast({global, environment}, {dead, self()}),
+	{stop, normal, State}.
 
 %%----------------------------------------------------------------------
 %% Function: *

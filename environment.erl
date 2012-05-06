@@ -37,8 +37,11 @@
 %%% handle_cast({ticks, Count}, From, State)
 %%%   Interface for the behaviour gen_server. Request and initializes
 %%%   the next Count cycles
+%%% handle_cast({dead, Individual}, State)
+%%%   Interface for the behaviour gen_server. Handles death
+%%%   individuals
 %%% handle_cast(stop, State)
-%%%   Interface for the behaviour gen_server. Kills the individual
+%%%   Interface for the behaviour gen_server. Kills the environment
 %%% handle_info(Message, State)
 %%%   Interface for the behaviour gen_server. Dummy w/o functionality
 %%% terminate(Reason, State)
@@ -372,15 +375,8 @@ internal_tick(State) ->
 %% Returns: {ok, NewState}.
 %%----------------------------------------------------------------------
 finish_tick(State) ->
-	FunFor = fun(Pid) ->
-		gen_server:cast(Pid, stop)
-	end,
-	
 	if
 		length(State#environmentState.population) == 0 ->
-			% kill all individuals who requested it
-			lists:foreach(FunFor, State#environmentState.killlist),
-			
 			% update state
 			NewState = State#environmentState{
 				population = State#environmentState.new_population,
@@ -448,7 +444,7 @@ handle_cast({reproduced, Parent, Childs}, State) ->
 		new_population = NewPopulation
 	},
 	
-	gen_server:cast(self(), {killme, Parent}),
+	gen_server:cast(Parent, stop),
 	
 	{ok, NewState2} = finish_tick(NewState),
 	
@@ -460,7 +456,36 @@ handle_cast({reproduced, Parent, Childs}, State) ->
 %% Args: -
 %% Returns: {noreply, NewState}.
 %%----------------------------------------------------------------------
-handle_cast({killme, Individual}, State) ->
+%handle_cast({killme, Individual}, State) ->
+%	FunFilter = fun(Ind) ->
+%		{Pid, _Fitness} = Ind,
+%		if
+%			Pid == Individual ->
+%				false;
+%			true ->
+%				true
+%		end
+%	end,
+%	Population = lists:filter(FunFilter, State#environmentState.population),
+%	
+%	Killlist = State#environmentState.killlist,
+%	
+%	NewState = State#environmentState{
+%		population = Population,
+%		killlist = Killlist ++ [Individual]
+%	},
+%	
+%	{ok, NewState2} = finish_tick(NewState),
+%	
+%	{noreply, NewState2};
+
+%%----------------------------------------------------------------------
+%% Function: handle_cast/2
+%% Purpose: Handles incoming reproduction results
+%% Args: -
+%% Returns: {noreply, NewState}.
+%%----------------------------------------------------------------------
+handle_cast({dead, Individual}, State) ->
 	FunFilter = fun(Ind) ->
 		{Pid, _Fitness} = Ind,
 		if
@@ -472,11 +497,8 @@ handle_cast({killme, Individual}, State) ->
 	end,
 	Population = lists:filter(FunFilter, State#environmentState.population),
 	
-	Killlist = State#environmentState.killlist,
-	
 	NewState = State#environmentState{
-		population = Population,
-		killlist = Killlist ++ [Individual]
+		population = Population
 	},
 	
 	{ok, NewState2} = finish_tick(NewState),
@@ -499,7 +521,7 @@ handle_cast(stop, State) ->
 	% call triggers
 	lists:foreach(FunKill, State#environmentState.population),
 	lists:foreach(FunKill, State#environmentState.new_population),
-
+	
 	{stop, normal, State}.
 
 %%----------------------------------------------------------------------
