@@ -29,8 +29,7 @@ formated statistics.
 The following example writes each 10 ticks the tickcount and the unix timestamp
 to the file special_statistics:
 ```erlang
-monitor_trigger:start("echo -n ~w~i~i >> special_statistics; date '+ %s'
->> special_statistics", 10, format). 
+monitor_trigger:start("echo -n ~w~i~i >> special_statistics; date '+ %s' >> special_statistics", 10, format). 
 ```
 
 For more details check the header of the module.
