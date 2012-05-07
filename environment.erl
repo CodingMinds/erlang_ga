@@ -85,7 +85,7 @@ start() ->
 		Decimal * Decimal
 	end,
 	
-	start({0,1}, 8, 10, 0.2, Fitness, [crossover]).
+	start({0,1}, 8, 100, 0.2, Fitness, [crossover]).
 
 %%----------------------------------------------------------------------
 %% Function: start/6
