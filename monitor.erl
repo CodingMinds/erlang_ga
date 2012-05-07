@@ -108,8 +108,10 @@ handle_cast({population, Age, Population}, State) ->
 	end,
 	Fitness = lists:sum(lists:map(FunMap, Population)),
 	
+	AvgFitness = Fitness / length(Population),
+	
 	file:write_file(State#monitorState.filename,
-		io_lib:fwrite("~w\t~w~n", [Age, Fitness]), [append]),
+		io_lib:fwrite("~w\t~w\t~w~n", [Age, Fitness, AvgFitness]), [append]),
 	
 	{noreply, State};
 
