@@ -74,7 +74,7 @@ For further details check the source code annotations.
 
 Intel(R) Core(TM) i7 CPU 950 @ 3.07GHz (mostly idle):
 
-100,000 cycles with default parameters are computed in round about 4 minutes.
+100,000 cycles with default parameters (100 Individual, 8Bit Genome) are computed in less than 45 minutes.
 
 ## Licence
 [GNU General Public License v3](http://www.gnu.org/licenses/gpl.html)
